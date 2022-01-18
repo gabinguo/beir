@@ -1,129 +1,136 @@
-'''
-This examples show how to train a Bi-Encoder for any BEIR dataset.
+"""
+    These examples show how to train a Bi-Encoder for any BEIR dataset.
 
-The queries and passages are passed independently to the transformer network to produce fixed sized embeddings.
-These embeddings can then be compared using cosine-similarity to find matching passages for a given query.
+    The queries and passages are passed independently to the transformer network to produce fixed sized embeddings.
+    These embeddings can then be compared using cosine-similarity to find matching passages for a given query.
 
-For training, we use MultipleNegativesRankingLoss. There, we pass triplets in the format:
-(query, positive_passage, negative_passage)
+    For training, we use MultipleNegativesRankingLoss. There, we pass triplets in the format:
+    (query, positive_passage, negative_passage)
 
-Negative passage are hard negative examples, that where retrieved by lexical search. We use Elasticsearch
-to get (max=10) hard negative examples given a positive passage. 
+    Negative passage are hard negative examples, that where retrieved by lexical search. We use Elasticsearch
+    to get (max=10) hard negative examples given a positive passage.
 
-Running this script:
-python train_sbert_BM25_hardnegs.py
-'''
+    Running this script:
+    python train_sbert_BM25_hardnegs.py
+"""
+import argparse
+import itertools
+import json
 
+import requests
 from sentence_transformers import losses, models, SentenceTransformer
-from beir import util, LoggingHandler
+from beir.configs import default_ranker, dataset_stored_loc
+from beir.custom_logging import setup_logger
 from beir.datasets.data_loader import GenericDataLoader
-from beir.retrieval.search.lexical import BM25Search as BM25
-from beir.retrieval.evaluation import EvaluateRetrieval
 from beir.retrieval.train import TrainRetriever
 import pathlib, os, tqdm
 import logging
 
-#### Just some code to print debug information to stdout
-logging.basicConfig(format='%(asctime)s - %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    level=logging.INFO,
-                    handlers=[LoggingHandler()])
-#### /print debug information to stdout
+logger = logging.getLogger(__name__)
+setup_logger(logger)
 
-#### Download nfcorpus.zip dataset and unzip the dataset
-dataset = "scifact"
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dataset", type=str)
+    parser.add_argument("--split", type=str, default="train")
+    parser.add_argument("--ranker", type=str, default=default_ranker)
+    parser.add_argument("--batch_size", type=int, default=32)
+    parser.add_argument("--limit", type=int, default=100)
+    params = parser.parse_args()
 
-url = "https://public.ukp.informatik.tu-darmstadt.de/thakur/BEIR/datasets/{}.zip".format(dataset)
-out_dir = os.path.join(pathlib.Path(__file__).parent.absolute(), "datasets")
-data_path = util.download_and_unzip(url, out_dir)
+    #### Download nfcorpus.zip dataset and unzip the dataset
+    dataset = params.dataset
+    data_path = os.path.join(dataset_stored_loc, dataset)
 
-#### Provide the data_path where scifact has been downloaded and unzipped
-corpus, queries, qrels = GenericDataLoader(data_path).load(split="train")
+    #### Provide the data_path where scifact has been downloaded and unzipped
+    corpus, queries, qrels = GenericDataLoader(data_path).load(split=params.split)
 
-# #### Please Note not all datasets contain a dev split, comment out the line if such the case
-# dev_corpus, dev_queries, dev_qrels = GenericDataLoader(data_path).load(split="dev")
+    queries = dict(itertools.islice(queries.items(), params.limit))
+    qrels = dict(itertools.islice(qrels.items(), params.limit))
 
-#### Lexical Retrieval using Bm25 (Elasticsearch) ####
-#### Provide a hostname (localhost) to connect to ES instance
-#### Define a new index name or use an already existing one.
-#### We use default ES settings for retrieval
-#### https://www.elastic.co/
+    # Convert BEIR corpus to Pyserini Format #
+    pyserini_jsonl = "pyserini.jsonl"
+    with open(os.path.join(data_path, pyserini_jsonl), 'w', encoding="utf-8") as fOut:
+        for doc_id in corpus:
+            title, text = corpus[doc_id].get("title", ""), corpus[doc_id].get("text", "")
+            data = {"id": doc_id, "title": title, "contents": text}
+            json.dump(data, fOut)
+            fOut.write('\n')
 
-hostname = "your-hostname" #localhost
-index_name = "your-index-name" # scifact
+    # make sure the docker beir pyserini container is on, (restarted)
+    docker_beir_pyserini = "http://127.0.0.1:8000"
 
-#### Intialize #### 
-# (1) True - Delete existing index and re-index all documents from scratch 
-# (2) False - Load existing index
-initialize = True # False
+    # Upload Multipart-encoded files
+    logger.info("[Start] Uploading to the Pyserini docker container...")
+    with open(os.path.join(data_path, "pyserini.jsonl"), "rb") as fIn:
+        r = requests.post(docker_beir_pyserini + "/upload/", files={"file": fIn}, verify=False)
+    logger.info("[Done_] Uploading to the Pyserini docker container...")
 
-#### Sharding ####
-# (1) For datasets with small corpus (datasets ~ < 5k docs) => limit shards = 1 
-# SciFact is a relatively small dataset! (limit shards to 1)
-number_of_shards = 1
-model = BM25(index_name=index_name, hostname=hostname, initialize=initialize, number_of_shards=number_of_shards)
+    logger.info("[Start] Indexing in the Pyserini docker container...")
+    # Index documents to Pyserini #
+    index_name = f"beir-{dataset}"
+    r = requests.get(docker_beir_pyserini + "/index/", params={"index_name": index_name})
+    logger.info("[Done_] Indexing in the Pyserini docker container...")
 
-# (2) For datasets with big corpus ==> keep default configuration
-# model = BM25(index_name=index_name, hostname=hostname, initialize=initialize)
-bm25 = EvaluateRetrieval(model)
+    # start collecting training data
+    triplets = []
+    qids = list(qrels)
+    hard_negatives_max = 10
 
-#### Index passages into the index (seperately)
-bm25.retriever.index(corpus)
+    for idx in tqdm.tqdm(range(len(qids)), desc="Retrieve Hard Negatives using BM25", leave=False):
+        query_id, query_text = qids[idx], queries[qids[idx]]
+        pos_docs = [doc_id for doc_id in qrels[query_id] if qrels[query_id][doc_id] > 0]
+        # use document to retrieve
+        pos_doc_texts = [corpus[doc_id]["title"] + " " + corpus[doc_id]["text"] for doc_id in pos_docs]
+        # use query to retrieve
+        # TODO:
+        # BM25
+        # hits = bm25.retriever.es.lexical_multisearch(texts=pos_doc_texts, top_hits=hard_negatives_max + 1)
 
-triplets = []
-qids = list(qrels) 
-hard_negatives_max = 10
+        # Pyserini
+        payload = {"queries": pos_doc_texts, "qids": [query_id], "k": hard_negatives_max + 1}
+        hits = json.loads(requests.post(docker_beir_pyserini + "/lexical/batch_search/", json=payload).text)[
+            "results"]
 
-#### Retrieve BM25 hard negatives => Given a positive document, find most similar lexical documents
-for idx in tqdm.tqdm(range(len(qids)), desc="Retrieve Hard Negatives using BM25"):
-    query_id, query_text = qids[idx], queries[qids[idx]]
-    pos_docs = [doc_id for doc_id in qrels[query_id] if qrels[query_id][doc_id] > 0]
-    pos_doc_texts = [corpus[doc_id]["title"] + " " + corpus[doc_id]["text"] for doc_id in pos_docs]
-    hits = bm25.retriever.es.lexical_multisearch(texts=pos_doc_texts, top_hits=hard_negatives_max+1)
-    for (pos_text, hit) in zip(pos_doc_texts, hits):
-        for (neg_id, _) in hit.get("hits"):
-            if neg_id not in pos_docs:
-                neg_text = corpus[neg_id]["title"] + " " + corpus[neg_id]["text"]
-                triplets.append([query_text, pos_text, neg_text])
+        for pos_text in pos_doc_texts:
+            for neg_id in hits[query_id]:
+                if neg_id not in pos_docs:
+                    neg_text = corpus[neg_id]["title"] + " " + corpus[neg_id]["text"]
+                    triplets.append([query_text, pos_text, neg_text])
 
-#### Provide any sentence-transformers or HF model
-model_name = "distilbert-base-uncased" 
-word_embedding_model = models.Transformer(model_name, max_seq_length=300)
-pooling_model = models.Pooling(word_embedding_model.get_word_embedding_dimension())
-model = SentenceTransformer(modules=[word_embedding_model, pooling_model])
+    #### Provide any sentence-transformers or HF model
+    model_name = params.ranker
+    word_embedding_model = models.Transformer(model_name, max_seq_length=300)
+    pooling_model = models.Pooling(word_embedding_model.get_word_embedding_dimension())
+    model = SentenceTransformer(modules=[word_embedding_model, pooling_model])
 
-#### Provide a high batch-size to train better with triplets!
-retriever = TrainRetriever(model=model, batch_size=32)
+    #### Provide a high batch-size to train better with triplets!
+    retriever = TrainRetriever(model=model, batch_size=params.batch_size)
 
-#### Prepare triplets samples
-train_samples = retriever.load_train_triplets(triplets=triplets)
-train_dataloader = retriever.prepare_train_triplets(train_samples)
+    #### Prepare triplets samples
+    train_samples = retriever.load_train_triplets(triplets=triplets)
+    train_dataloader = retriever.prepare_train_triplets(train_samples)
 
-#### Training SBERT with cosine-product
-train_loss = losses.MultipleNegativesRankingLoss(model=retriever.model)
+    #### Training SBERT with cosine-product
+    train_loss = losses.MultipleNegativesRankingLoss(model=retriever.model)
 
-#### training SBERT with dot-product
-# train_loss = losses.MultipleNegativesRankingLoss(model=retriever.model, similarity_fct=util.dot_score)
+    #### If no dev set is present from above use dummy evaluator
+    ir_evaluator = retriever.load_dummy_evaluator()
 
-#### Prepare dev evaluator
-# ir_evaluator = retriever.load_ir_evaluator(dev_corpus, dev_queries, dev_qrels)
+    #### Provide model save path
+    model_save_path = os.path.join(pathlib.Path(__file__).parent.absolute(), "output",
+                                   "{}-v2-{}-bm25-{}-hard-negs".format(model_name, dataset, params.limit))
+    os.makedirs(model_save_path, exist_ok=True)
 
-#### If no dev set is present from above use dummy evaluator
-ir_evaluator = retriever.load_dummy_evaluator()
+    #### Configure Train params
+    num_epochs = 1
+    evaluation_steps = 10000
+    warmup_steps = int(len(train_samples) * num_epochs / retriever.batch_size * 0.1)
 
-#### Provide model save path
-model_save_path = os.path.join(pathlib.Path(__file__).parent.absolute(), "output", "{}-v2-{}-bm25-hard-negs".format(model_name, dataset))
-os.makedirs(model_save_path, exist_ok=True)
-
-#### Configure Train params
-num_epochs = 1
-evaluation_steps = 10000
-warmup_steps = int(len(train_samples) * num_epochs / retriever.batch_size * 0.1)
-
-retriever.fit(train_objectives=[(train_dataloader, train_loss)], 
-                evaluator=ir_evaluator, 
-                epochs=num_epochs,
-                output_path=model_save_path,
-                warmup_steps=warmup_steps,
-                evaluation_steps=evaluation_steps,
-                use_amp=True)
+    retriever.fit(train_objectives=[(train_dataloader, train_loss)],
+                  evaluator=ir_evaluator,
+                  epochs=num_epochs,
+                  output_path=model_save_path,
+                  warmup_steps=warmup_steps,
+                  evaluation_steps=evaluation_steps,
+                  use_amp=True)

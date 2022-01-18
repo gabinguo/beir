@@ -97,7 +97,7 @@ class GenericDataLoader:
     
         num_lines = sum(1 for i in open(self.corpus_file, 'rb'))
         with open(self.corpus_file, encoding='utf8') as fIn:
-            for line in tqdm(fIn, total=num_lines):
+            for line in tqdm(fIn, total=num_lines, desc="Loading Corpus: ", leave=False):
                 line = json.loads(line)
                 self.corpus[line.get("_id")] = {
                     "text": line.get("text"),
