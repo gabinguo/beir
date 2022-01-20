@@ -19,7 +19,8 @@ if __name__ == '__main__':
     parser.add_argument("--dataset", type=str)
     parser.add_argument("--split", type=str, default="test")
     parser.add_argument("--ranker", type=str, default=default_ranker)
-    parser.add_argument("--batch_size", type=int, default=32)
+    parser.add_argument("--batch_size", type=int, default=128)
+    parser.add_argument("--port", type=int, default=8000)
     params = parser.parse_args()
 
     # Download trec-covid.zip dataset and unzip the dataset
@@ -38,30 +39,10 @@ if __name__ == '__main__':
     # Modified, originally it was pure BM25
     #########################################
 
-    # Convert BEIR corpus to Pyserini Format #
-    pyserini_jsonl = "pyserini.jsonl"
-    with open(os.path.join(data_path, pyserini_jsonl), 'w', encoding="utf-8") as fOut:
-        for doc_id in corpus:
-            title, text = corpus[doc_id].get("title", ""), corpus[doc_id].get("text", "")
-            data = {"id": doc_id, "title": title, "contents": text}
-            json.dump(data, fOut)
-            fOut.write('\n')
-
     # make sure the docker beir pyserini container is on, (restarted)
-    docker_beir_pyserini = "http://127.0.0.1:8000"
+    docker_beir_pyserini = f"http://127.0.0.1:{params.port}"
 
-    # Upload Multipart-encoded files
-    logger.info("[Start] Uploading to the Pyserini docker container...")
-    with open(os.path.join(data_path, "pyserini.jsonl"), "rb") as fIn:
-        r = requests.post(docker_beir_pyserini + "/upload/", files={"file": fIn}, verify=False)
-    logger.info("[Done_] Uploading to the Pyserini docker container...")
-
-    logger.info("[Start] Indexing in the Pyserini docker container...")
-    # Index documents to Pyserini #
-    index_name = f"beir-{dataset}"
-    r = requests.get(docker_beir_pyserini + "/index/", params={"index_name": index_name})
-    logger.info("[Done_] Indexing in the Pyserini docker container...")
-
+    logger.info("[Start] Evaluating...")
     # Retrieve documents from Pyserini #
     retriever = EvaluateRetrieval()
     qids = list(queries)

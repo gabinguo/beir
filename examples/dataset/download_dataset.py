@@ -17,8 +17,8 @@ def main():
     #                  "climate-fever.zip", "scifact.zip", "germanquad.zip"]
 
     # download the necessary datasets that one may need
-    # dataset_files = ["nfcorpus.zip", "hotpotqa.zip", "fiqa.zip", "quora.zip", "fever.zip", "scifact.zip"]
-    dataset_files = ["scifact"]
+    dataset_files = ["nfcorpus", "hotpotqa", "fiqa", "quora", "fever", "scifact"]
+    # dataset_files = ["scifact"]
 
     for dataset in dataset_files:
         zip_file = os.path.join(dataset_stored_loc, f"{dataset}.zip")

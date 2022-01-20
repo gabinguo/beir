@@ -1,12 +1,12 @@
 """
 This example shows how to evaluate Anserini-BM25 in BEIR.
-Since Anserini uses Java-11, we would advise you to use docker for running Pyserini. 
+Since Anserini uses Java-11, we would advise you to use docker for running Pyserini.
 To be able to run the code below you must have docker locally installed in your machine.
 To install docker on your local machine, please refer here: https://docs.docker.com/get-docker/
 
 After docker installation, please follow the steps below to get docker container up and running:
 
-1. docker pull beir/pyserini-fastapi 
+1. docker pull beir/pyserini-fastapi
 2. docker build -t pyserini-fastapi .
 3. docker run -p 8000:8000 -it --rm pyserini-fastapi
 
@@ -33,6 +33,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", type=str)
     parser.add_argument("--split", type=str, default="test")
+    parser.add_argument("--port", type=int, default=8000)
     params = parser.parse_args()
 
     # Download scifact.zip dataset and unzip the dataset
@@ -40,25 +41,8 @@ if __name__ == '__main__':
     data_path = os.path.join(dataset_stored_loc, dataset)
     corpus, queries, qrels = GenericDataLoader(data_path).load(split=params.split)
 
-   # Convert BEIR corpus to Pyserini Format #
-    pyserini_jsonl = "pyserini.jsonl"
-    with open(os.path.join(data_path, pyserini_jsonl), 'w', encoding="utf-8") as fOut:
-        for doc_id in corpus:
-            title, text = corpus[doc_id].get("title", ""), corpus[doc_id].get("text", "")
-            data = {"id": doc_id, "title": title, "contents": text}
-            json.dump(data, fOut)
-            fOut.write('\n')
-
     # make sure the docker beir pyserini container is on, (restarted)
-    docker_beir_pyserini = "http://127.0.0.1:8000"
-
-    # Upload Multipart-encoded files
-    with open(os.path.join(data_path, "pyserini.jsonl"), "rb") as fIn:
-        r = requests.post(docker_beir_pyserini + "/upload/", files={"file": fIn}, verify=False)
-
-    # Index documents to Pyserini #
-    index_name = f"beir-{dataset}"
-    r = requests.get(docker_beir_pyserini + "/index/", params={"index_name": index_name})
+    docker_beir_pyserini = f"http://localhost:{params.port}"
 
     # Retrieve documents from Pyserini #
     retriever = EvaluateRetrieval()
