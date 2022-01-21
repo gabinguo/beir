@@ -59,7 +59,7 @@ if __name__ == '__main__':
     ################################################
     #### Reranking using Cross-Encoder models #####
     logger.info("[Start] Re-Rank the retrieved results...")
-    cross_encoder_model = CrossEncoder(default_ranker)
+    cross_encoder_model = CrossEncoder(params.ranker)
     reranker = Rerank(cross_encoder_model, batch_size=params.batch_size)
 
     # Rerank top-100 results using the reranker provided
