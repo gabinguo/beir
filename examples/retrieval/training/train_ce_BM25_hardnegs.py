@@ -63,23 +63,30 @@ if __name__ == '__main__':
 
     for idx in tqdm.tqdm(range(len(qids)), desc="Retrieve Hard Negatives using BM25", leave=False):
         query_id, query_text = qids[idx], queries[qids[idx]]
+        # get the ids of positive documents
         pos_docs = [doc_id for doc_id in qrels[query_id] if qrels[query_id][doc_id] > 0]
-        # use document to retrieve
+        # use title + document to retrieve
         pos_doc_texts = [corpus[doc_id]["title"] + " " + corpus[doc_id]["text"] for doc_id in pos_docs]
         # use query to retrieve
         # pos_doc_texts = [corpus[doc_id]["title"] + " " + query_text for doc_id in pos_docs]
         # Pyserini
-        payload = {"queries": pos_doc_texts, "qids": [query_id] * len(pos_doc_texts), "k": hard_negatives_max + 1}
-        hits = json.loads(requests.post(docker_beir_pyserini + "/lexical/batch_search/", json=payload).text)[
-            "results"]
+        payload = {
+            "queries": pos_doc_texts,
+            "qids": [f"query_id_{query_idx + 1}" for query_idx in range(len(pos_doc_texts))],
+            "k": hard_negatives_max + 1
+        }
+        hits = json.loads(
+            requests.post(docker_beir_pyserini + "/lexical/batch_search/", json=payload).text)["results"]
 
-        for pos_text in pos_doc_texts:
-            count = 0
-            for neg_id in hits[query_id]:
-                if neg_id not in pos_docs and count < hard_negatives_max:
+        for hit in hits:
+            hits[hit] = dict(itertools.islice(hits[hit].items(), hard_negatives_max + 1))
+
+        for pos_idx, pos_text in enumerate(pos_doc_texts):
+            que_id = f"query_id_{pos_idx + 1}"
+            for neg_id in hits[que_id]:
+                if neg_id not in pos_docs:
                     neg_text = corpus[neg_id]["title"] + " " + corpus[neg_id]["text"]
                     triplets.append([query_text, pos_text, neg_text])
-                    count += 1
 
     logger.info(f"Gathered {len(triplets)} triplets for training.")
 
@@ -89,11 +96,14 @@ if __name__ == '__main__':
     model = CrossEncoder(model_name, num_labels=1, max_length=512)
 
     train_examples = []
+    record_pos = set()
     for triplet in tqdm.tqdm(triplets, desc="Convert triplets to CE training data: ", leave=False):
         query_text, pos_text, neg_text = triplet
-        train_examples.append(InputExample(
-            texts=[query_text, pos_text], label=10
-        ))
+        if query_text not in record_pos:
+            record_pos.add(query_text)
+            train_examples.append(InputExample(
+                texts=[query_text, pos_text], label=10
+            ))
         train_examples.append(InputExample(
             texts=[query_text, neg_text], label=0
         ))
