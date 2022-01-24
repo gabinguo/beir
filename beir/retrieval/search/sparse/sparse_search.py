@@ -3,7 +3,10 @@ from typing import List, Dict, Union, Tuple
 import logging
 import numpy as np
 
+from beir.custom_logging import setup_logger
+
 logger = logging.getLogger(__name__)
+setup_logger(logger)
 
 class SparseSearch:
     
@@ -21,7 +24,7 @@ class SparseSearch:
         doc_ids = list(corpus.keys())
         query_ids = list(queries.keys())
         documents = [corpus[doc_id] for doc_id in doc_ids]
-        logging.info("Computing document embeddings and creating sparse matrix")
+        logger.info("Computing document embeddings and creating sparse matrix")
         self.sparse_matrix = self.model.encode_corpus(documents, batch_size=self.batch_size)
         
         logging.info("Starting to Retrieve...")
