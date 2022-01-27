@@ -1,6 +1,6 @@
 from beir.datasets.data_loader import GenericDataLoader
 from beir.configs import dataset_stored_loc
-from beir.custom_logging import setup_logger
+from beir.custom_logging import setup_logger, log_map
 from sentence_transformers import InputExample
 from typing import List, Set
 from tqdm import tqdm
@@ -61,7 +61,6 @@ def collect_training_data(dataset_name: str, limit: int, split: str = "train", n
                         cnt_hard_negatives += 1
 
         record_hit_ids: Set[str] = set(record_hit_ids)
-
         # Block to add random negatives
         while cnt_random_negatives < number_random_negatives:
             random_document_id = random.choice(corpus_ids)
@@ -72,6 +71,7 @@ def collect_training_data(dataset_name: str, limit: int, split: str = "train", n
             negative_examples.append(InputExample(
                 texts=[query_text, random_negative_document], label=0
             ))
+            cnt_random_negatives += 1
 
         curr_folder = os.path.abspath(os.path.dirname(__file__))
         os.makedirs(os.path.join(curr_folder, dataset_name), exist_ok=True)
@@ -97,6 +97,8 @@ if __name__ == "__main__":
     parser.add_argument("--number_hard_negatives", type=int, default=2)
 
     params = parser.parse_args()
+    log_map(logger, "Arguments", params.__dict__)
+
     dataset = params.dataset
     split = params.split
     limit = params.limit
