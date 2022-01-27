@@ -63,7 +63,7 @@ def collect_training_data(number_positives: int = 1, number_random_negatives: in
         # Block to add random negatives
         while cnt_random_negatives < number_random_negatives:
             random_document_id = random.choice(corpus_ids)
-            while random_document_id in record_hit_ids:
+            while random_document_id in record_hit_ids or random_document_id in positive_document_ids:
                 logger.info("Overlapped with hard examples... random pick another one...")
                 random_document_id = random.choice(corpus_ids)
             random_negative_document = corpus[random_document_id]["title"] + " " + corpus[random_document_id]["text"]
