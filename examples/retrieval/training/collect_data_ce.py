@@ -15,9 +15,8 @@ logger = logging.getLogger(__name__)
 setup_logger(logger)
 
 
-def collect_training_data(dataset_name: str, limit: int, split: str = "train", number_positives: int = 1,
-                          number_random_negatives: int = 2, number_hard_negatives: int = 2):
-    data_folder: str = os.path.join(dataset_stored_loc, dataset_name)
+def collect_training_data(number_positives: int = 1, number_random_negatives: int = 2, number_hard_negatives: int = 2):
+    data_folder: str = os.path.join(dataset_stored_loc, dataset)
     corpus, queries, qrels = GenericDataLoader(data_folder).load(split=split)
     query_ids: List[str] = list(qrels)
     corpus_ids: List[str] = list(corpus)
@@ -74,8 +73,8 @@ def collect_training_data(dataset_name: str, limit: int, split: str = "train", n
             cnt_random_negatives += 1
 
         curr_folder = os.path.abspath(os.path.dirname(__file__))
-        os.makedirs(os.path.join(curr_folder, dataset_name), exist_ok=True)
-        with open(os.path.join(curr_folder, dataset_name, output_ds_name),
+        os.makedirs(os.path.join(curr_folder, dataset), exist_ok=True)
+        with open(os.path.join(curr_folder, dataset, output_ds_name),
                   'w') as f:
             for example in [*positive_examples, *negative_examples]:
                 f.write(json.dumps({
@@ -109,9 +108,6 @@ if __name__ == "__main__":
     output_ds_name: str = f"{dataset}_{split}_{limit}_rand_{num_rands}_hard_{num_hards}.jsonl"
     docker_beir_pyserini = f"http://localhost:{params.port}"
     collect_training_data(
-        dataset_name=dataset,
-        limit=limit,
-        split=split,
         number_positives=num_pos,
         number_random_negatives=num_rands,
         number_hard_negatives=num_hards
