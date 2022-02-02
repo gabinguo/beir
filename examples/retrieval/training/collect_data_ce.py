@@ -72,17 +72,16 @@ def collect_training_data(number_positives: int = 1, number_random_negatives: in
             ))
             cnt_random_negatives += 1
 
-        curr_folder = os.path.abspath(os.path.dirname(__file__))
-        os.makedirs(os.path.join(curr_folder, dataset), exist_ok=True)
-        with open(os.path.join(curr_folder, dataset, output_ds_name),
-                  'w') as f:
-            for example in [*positive_examples, *negative_examples]:
-                f.write(json.dumps({
-                    "query": example.texts[0],
-                    "document": example.texts[1],
-                    "label": example.label
-                }))
-                f.write("\n")
+    curr_folder = os.path.abspath(os.path.dirname(__file__))
+    os.makedirs(os.path.join(curr_folder, dataset), exist_ok=True)
+    with open(os.path.join(curr_folder, dataset, output_ds_name), 'w') as f:
+        for example in [*positive_examples, *negative_examples]:
+            f.write(json.dumps({
+                "query": example.texts[0],
+                "document": example.texts[1],
+                "label": example.label
+            }))
+            f.write("\n")
 
 
 if __name__ == "__main__":
