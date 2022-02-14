@@ -1,4 +1,3 @@
-from beir import util, LoggingHandler
 from beir.configs import dataset_stored_loc
 from beir.custom_logging import setup_logger
 from beir.retrieval import models
@@ -7,7 +6,6 @@ from beir.retrieval.evaluation import EvaluateRetrieval
 from beir.retrieval.search.dense import DenseRetrievalExactSearch as DRES
 
 import logging
-import pathlib
 import os
 import argparse
 
@@ -20,7 +18,6 @@ if __name__ == '__main__':
     parser.add_argument("--split", type=str, default="test")
     parser.add_argument("--query_encoder", type=str, default="facebook-dpr-question_encoder-multiset-base")
     parser.add_argument("--context_encoder", type=str, default="facebook-dpr-ctx_encoder-multiset-base")
-    parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--batch_size", type=int, default=32)
     params = parser.parse_args()
 
