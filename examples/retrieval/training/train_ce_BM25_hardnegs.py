@@ -18,14 +18,12 @@ import itertools
 import json
 
 import requests
-import torch.nn as nn
 from torch.utils.data import DataLoader
-from sentence_transformers import losses, models, SentenceTransformer, CrossEncoder, InputExample
-from beir.configs import default_ranker, dataset_stored_loc, basedir
+from sentence_transformers import CrossEncoder, InputExample
+from beir.configs import default_ranker, dataset_stored_loc
 from beir.custom_logging import setup_logger, log_map
 from beir.datasets.data_loader import GenericDataLoader
-from beir.retrieval.train import TrainRetriever
-import pathlib, os, tqdm
+import os, tqdm
 import logging
 
 logger = logging.getLogger(__name__)
@@ -43,7 +41,6 @@ if __name__ == '__main__':
 
     log_map(logger, "Arguments", params.__dict__)
 
-    #### Download nfcorpus.zip dataset and unzip the dataset
     dataset = params.dataset
     data_path = os.path.join(dataset_stored_loc, dataset)
 
@@ -97,16 +94,23 @@ if __name__ == '__main__':
 
     train_examples = []
     record_pos = set()
+    record_negs = dict()
     for triplet in tqdm.tqdm(triplets, desc="Convert triplets to CE training data: ", leave=False):
         query_text, pos_text, neg_text = triplet
         if query_text not in record_pos:
             record_pos.add(query_text)
             train_examples.append(InputExample(
-                texts=[query_text, pos_text], label=10
+                texts=[query_text, pos_text], label=0.99
             ))
-        train_examples.append(InputExample(
-            texts=[query_text, neg_text], label=0
-        ))
+        if neg_text not in record_negs[query_text]:
+            if record_negs[query_text]:
+                record_negs[query_text].append(neg_text)
+            else:
+                record_negs[query_text] = [neg_text]
+            train_examples.append(InputExample(
+                texts=[query_text, neg_text], label=0.01
+            ))
+
     logger.info(f"Convert {len(triplets)} triplets to {len(train_examples)} input examples.")
 
     train_dataloader = DataLoader(train_examples, shuffle=True, batch_size=params.batch_size)
@@ -121,11 +125,10 @@ if __name__ == '__main__':
     warmup_steps = int(len(train_examples) * num_epochs / params.batch_size * 0.1)
 
     model.fit(train_dataloader=train_dataloader,
-                  epochs=num_epochs,
-                  loss_fct=nn.MSELoss(),
-                  output_path=model_save_path,
-                  warmup_steps=warmup_steps,
-                  evaluation_steps=evaluation_steps,
-                  use_amp=True)
+              epochs=num_epochs,
+              output_path=model_save_path,
+              warmup_steps=warmup_steps,
+              evaluation_steps=evaluation_steps,
+              use_amp=True)
 
     model.save_pretrained(model_save_path)
