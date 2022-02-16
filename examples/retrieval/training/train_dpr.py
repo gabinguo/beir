@@ -1,3 +1,6 @@
+import os
+
+from farm.modeling.biadaptive_model import BiAdaptiveModel
 from haystack.nodes import DensePassageRetriever
 from haystack.document_stores import InMemoryDocumentStore
 import argparse
@@ -49,3 +52,12 @@ if __name__ == '__main__':
         num_warmup_steps=0,
         save_dir=params.save_dir
     )
+
+    farm_model = BiAdaptiveModel.load(load_dir=params.save_dir, device="cpu", lm1_name="query_encoder",
+                                      lm2_name="passage_encoder")
+    transformers_query_encoder, transformers_passage_encoder = farm_model.convert_to_transformers()
+    transformers_query_encoder.save_pretrained(f"./{params.save_dir}/dpr_query_encoder")
+    transformers_passage_encoder.save_pretrained(f"./{params.save_dir}/dpr_passage_encoder")
+
+    os.system(f'cp ./{params.save_dir}/query_encoder/tokenizer* ./{params.save_dir}/dpr_query_encoder')
+    os.system(f'cp ./{params.save_dir}/passage_encoder/tokenizer* ./{params.save_dir}/dpr_passage_encoder')
