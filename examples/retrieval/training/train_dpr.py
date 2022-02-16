@@ -15,16 +15,17 @@ if __name__ == '__main__':
     parser.add_argument("--test_file", type=str, help="test filename", default=None)
     parser.add_argument("--max_query_len", type=int, default=64)
     parser.add_argument("--max_passage_len", type=int, default=256)
-    parser.add_argument("--num_epochs", type=int, default=1)
-    parser.add_argument("--batch_size", type=int, default=1)
+    parser.add_argument("--num_epochs", type=int, default=2)
+    parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--grad_acc_steps", type=int, default=1)
     parser.add_argument("--number_positives", type=int, default=1)
-    parser.add_argument("--number_negatives", type=int, default=1)
+    parser.add_argument("--number_negatives", type=int, default=5)
+    parser.add_argument("--lr", type=float, default=1e-5)
     parser.add_argument("--save_dir", type=str, help="path to output the fine-tuned model")
-    query_model = "sentence-transformers/facebook-dpr-question_encoder-multiset-base"
-    passage_model = "sentence-transformers/facebook-dpr-ctx_encoder-multiset-base"
+    query_model = "facebook/dpr-question_encoder-multiset-base"
+    passage_model = "facebook/dpr-ctx_encoder-multiset-base"
     params = parser.parse_args()
-    log_map(logger, "Arguments", params._dict__)
+    log_map(logger, "Arguments", params.__dict__)
 
     retriever = DensePassageRetriever(
         document_store=InMemoryDocumentStore(),
@@ -40,6 +41,7 @@ if __name__ == '__main__':
         n_epochs=params.num_epochs,
         batch_size=params.batch_size,
         grad_acc_steps=params.grad_acc_steps,
+        learning_rate=params.lr,
         evaluate_every=100_000_000,  # no evaluation during training
         embed_title=False,
         num_positives=params.number_positives,

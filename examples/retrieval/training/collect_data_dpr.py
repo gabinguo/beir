@@ -136,5 +136,5 @@ if __name__ == '__main__':
 
     examples = collect_training_data_for_DPR()
     os.makedirs(os.path.join(basedir, 'dpr_store'), exist_ok=True)
-    with open(os.path.join(basedir, 'dpr_store', f'dpr_{dataset}_{split}.json'), 'w') as f:
+    with open(os.path.join(basedir, 'dpr_store', f'dpr_{dataset}_{split}_{limit}.json'), 'w') as f:
         json.dump(examples, f)
