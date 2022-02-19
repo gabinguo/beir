@@ -73,7 +73,7 @@ def collect_training_data_for_DPR() -> List[dict]:
         pos_ctxs: List[CTXExample] = []
         neg_ctxs: List[CTXExample] = []
         for pos_doc_id in positive_document_ids[:number_positives]:
-            title, text = corpus[pos_doc_id]["title"], corpus[pos_doc_id]["text"]
+            title, text = corpus[pos_doc_id].values()
             pos_ctxs.append(CTXExample(title=title, text=text, score=1000, title_score=1, passage_id=pos_doc_id))
             # search for the hard negatives
             payload = {
@@ -83,8 +83,6 @@ def collect_training_data_for_DPR() -> List[dict]:
             }
             hits = json.loads(
                 requests.post(docker_beir_pyserini + '/lexical/batch_search', json=payload).text)["results"]
-            if query_id not in hits:
-                continue
             hit_ids = list(hits[query_id])[:100]  # take the top-100 as hard negatives
 
             cnt_hard: int = 0
@@ -93,7 +91,7 @@ def collect_training_data_for_DPR() -> List[dict]:
             for hit_id in hit_ids:
                 if hit_id not in positive_document_ids and \
                         cnt_hard < number_hard_negatives:
-                    title, text = corpus[hit_id]["title"], corpus[hit_id]["text"]
+                    title, text = corpus[hit_id].values()
                     neg_ctxs.append(CTXExample(title=title, text=text, score=0, title_score=0, passage_id=hit_id))
                     cnt_hard += 1
 
@@ -103,7 +101,7 @@ def collect_training_data_for_DPR() -> List[dict]:
                 while rand_doc_id in hit_ids or rand_doc_id in positive_document_ids:
                     logger.info("Overlapped with hard/positive example..")
                     rand_doc_id = random.choice(corpus_ids)
-                title, text = corpus[rand_doc_id]["title"], corpus[rand_doc_id]["text"]
+                title, text = corpus[rand_doc_id].values()
                 neg_ctxs.append(CTXExample(title=title, text=text, score=0, title_score=0, passage_id=rand_doc_id))
                 cnt_rand += 1
 
