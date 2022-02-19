@@ -17,8 +17,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", type=str)
     parser.add_argument("--split", type=str, default="test")
-    parser.add_argument("--query_encoder", type=str, default="facebook/dpr-question_encoder-multiset-base")
-    parser.add_argument("--context_encoder", type=str, default="facebook/dpr-ctx_encoder-multiset-base")
+    parser.add_argument("--query_encoder", type=str,
+                        default="sentence-transformers/facebook-dpr-question_encoder-multiset-base")
+    parser.add_argument("--context_encoder", type=str,
+                        default="sentence-transformers/facebook-dpr-ctx_encoder-multiset-base")
     parser.add_argument("--batch_size", type=int, default=128)
     params = parser.parse_args()
 

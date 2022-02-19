@@ -25,8 +25,8 @@ if __name__ == '__main__':
     parser.add_argument("--number_negatives", type=int, default=5)
     parser.add_argument("--lr", type=float, default=1e-5)
     parser.add_argument("--save_dir", type=str, help="path to output the fine-tuned model")
-    query_model = "facebook/dpr-question_encoder-multiset-base"
-    passage_model = "facebook/dpr-ctx_encoder-multiset-base"
+    query_model = "sentence-transformers/facebook-dpr-question_encoder-multiset-base"
+    passage_model = "sentence-transformers/facebook-dpr-ctx_encoder-multiset-base"
     params = parser.parse_args()
     log_map(logger, "Arguments", params.__dict__)
 
